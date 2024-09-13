@@ -11,6 +11,6 @@ import java.util.Map;
 @Setter
 public class DatabaseMap {
 
-    Map<String, List<Table>> databaseSorgente;
-    Map<String, List<Table>> databaseDestinazione;
+    Map<String, Map<String, List<Table>>> databaseSorgente;
+    Map<String, Map<String, List<Table>>> databaseDestinazione;
 }

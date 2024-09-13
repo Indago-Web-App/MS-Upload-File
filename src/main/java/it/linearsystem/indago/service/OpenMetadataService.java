@@ -6,6 +6,7 @@ import org.openmetadata.client.api.DatabasesApi;
 import org.openmetadata.client.gateway.OpenMetadata;
 import org.openmetadata.client.model.*;
 import org.openmetadata.schema.entity.data.Table;
+import org.openmetadata.schema.entity.teams.AuthenticationMechanism;
 import org.openmetadata.schema.security.client.OpenMetadataJWTClientConfig;
 import org.openmetadata.schema.services.connections.database.MysqlConnection;
 import org.openmetadata.schema.services.connections.metadata.AuthProvider;
@@ -15,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -35,9 +37,9 @@ public class OpenMetadataService {
         OpenMetadata openMetadataGateway = new OpenMetadata(openMetadataConnection);
         // PRocess SORGENTE
         /*DatabaseService databaseService = createMysqlDatabaseService(openMetadataGateway);*/
-        Map<String, List<Table>> listDatabaseSorgente = fileProcessed.getDatabaseMap().getDatabaseSorgente();
+        /*Map<String, List<Table>> listDatabaseSorgente = fileProcessed.getDatabaseMap().getDatabaseSorgente();*/
 
-        Database database = createDatabase(openMetadataGateway, null, "mydb", "My db description.");
+        /*Database database = createDatabase(openMetadataGateway, databaseService, "mydb", "My db description.");*/
         logger.info("Ho inserito un database");
     }
 
@@ -59,8 +61,10 @@ public class OpenMetadataService {
         createdatabase.setName(dbName);
         createdatabase.setDescription(desc);
         createdatabase.setDisplayName(dbName);
-        // Associa il DatabaseService al Database
-        createdatabase.setService("databaseService");
+
+        // Associa il DatabaseService al Database usando un EntityReference
+        createdatabase.setService(service.getName());
+
         // Call API
         DatabasesApi databasesApi = openMetadataGateway.buildClient(DatabasesApi.class);
         return databasesApi.createOrUpdateDatabase(createdatabase);
@@ -85,7 +89,16 @@ public class OpenMetadataService {
         databaseConnectionConfig.setScheme(MysqlConnection.MySQLScheme.MYSQL_PYMYSQL);
         databaseConnectionConfig.setHostPort("localhost:3306");
         databaseConnectionConfig.setUsername("openmetadata_user");
-        /*databaseConnectionConfig.setAuthType();*/
+
+        // Aggiungi il meccanismo di autenticazione
+        AuthenticationMechanism auth = new AuthenticationMechanism();
+
+        // Configura la password e gli altri dettagli di autenticazione
+        Map<String, String> authConfig = new HashMap<>();
+        authConfig.put("password", "openmetadata_password");
+        auth.setConfig(authConfig);
+        databaseConnectionConfig.setAuthType(auth);  // Indica il tipo di autenticazione
+
         databaseConnectionConfig.setDatabaseSchema("openmetadata_db");
         databaseConnection.setConfig(databaseConnectionConfig);
         // Update create service request fields

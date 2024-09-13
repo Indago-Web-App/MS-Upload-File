@@ -183,68 +183,6 @@ public class FileUploadController {
             return ResponseEntity.ok(ResponseDto.<UploadFileResponse>builder().error("400", e.getMessage(), null).build());
         }
 
-
-//	    OpenMetadataClient client = new OpenMetadataClient();
-
-        /*        OpenMetadataConnection server = new OpenMetadataConnection();*/
-//	    OpenMetadataServerConnection server = new OpenMetadataServerConnection();
-    /*    server.setHostPort(openmetadataServerURL); // http://localhost:{port}}/api
-        server.setApiVersion("v1");*/
-//	    server.setAuthProvider(OpenMetadataConnection.AuthProvider.{auth_provider});
-//	    server.setAuthProvider(OpenMetadataServerConnection.AuthProvider.NO_AUTH);
-        /* server.setAuthProvider(AuthProvider.AUTH_0);*/
-//	    NoOpAuthenticationProvider noOpAuthenticationProvider = new NoOpAuthenticationProvider();
-//	    server.setAuthProvider(noOpAuthenticationProvider);
-      /*  OpenMetadataJWTClientConfig openMetadataJWTClientConfig = new OpenMetadataJWTClientConfig();
-        openMetadataJWTClientConfig.setJwtToken("{jwt_token}");*/
-//	    server.setAuthProvider(OpenMetadataServerConnection.AuthProvider.OPENMETADATA);
-//	    server.setSecurityConfig(openMetadataJWTClientConfig);
-
-//	    server.setSecurityConfig({security_client_config});
-
-//	    CustomOIDCSSOClientConfig customOIDCSSOClientConfig = new CustomOIDCSSOClientConfig();
-//	    customOIDCSSOClientConfig.setClientId("{client_id}");
-//	    customOIDCSSOClientConfig.setSecretKey("{client_secret}");
-//	    customOIDCSSOClientConfig.setTokenEndpoint("{token_endpoint}");
-//	    server.setAuthProvider(OpenMetadataServerConnection.AuthProvider.CUSTOM_OIDC);
-//	    server.setSecurityConfig(customOIDCSSOClientConfig);
-
-
-        // OpenMetadata Gateway
-        /*   OpenMetadata openMetadataGateway = new OpenMetadata(server);*/
-
-        // Dashboards API
-        /*   DashboardsApi dashboardApi = openMetadataGateway.buildClient(DashboardsApi.class);*/
-
-        // Tables API
-        /*   TablesApi tablesApiClient = openMetadataGateway.buildClient(TablesApi.class);*/
-
-        // Users API
-        /*  UsersApi usersApi = openMetadataGateway.buildClient(UsersApi.class);*/
-
-//	    // Locations API
-//	    LocationsApi locationsApi = openMetadataGateway.buildClient(LocationsApi.class);
-//	    
-//	    TablesApi tablesApi = openMetadataGateway.buildClient(TablesApi.class);
-//	    tablesApi.addLocationToTable("{table_id}", "{location_id}");
-//	    
-//	    LocationsApi locationsApi = openMetadataGateway.buildClient(LocationsApi.class);
-//	    CreateLocation createLocation = new CreateLocation();
-//	    Location location = locationsApi.createLocation(createLocation);
-
-    /*    resultCode = 0;
-        resultMessage = "Operazione conclusa con successo!";
-*/
-     /*   UploadFileResponse response = UploadFileResponse.builder()
-                .resultCode(resultCode)
-                .resultMessage(resultMessage)
-                .urlMultimedias(urlMultimedias)
-                .build();
-
-        logger.info("FINE uploadMultiFile - UploadMultiFileResponse: " + response);
-
-        return ResponseEntity.ok(ResponseDto.<UploadFileResponse>builder().noinfo(response).build());*/
-
     }
 
 }

@@ -27,11 +27,9 @@ public class FileProcessService {
     private final Logger log = LoggerFactory.getLogger(FileProcessService.class);
 
     public FileProcessDto processFile(FileValidityDto fileValidityDto) throws IOException {
-        XSSFWorkbook workbook = null;
         DatabaseMap databaseMap = new DatabaseMap();
-        try {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(fileValidityDto.getInputStream())) {
             // Carica il workbook dal file .xlsx
-            workbook = new XSSFWorkbook(fileValidityDto.getInputStream());
 
             // Ottieni il primo foglio
             XSSFSheet worksheet = workbook.getSheetAt(0);
@@ -51,69 +49,73 @@ public class FileProcessService {
                     }
                 } else {
                     // Per le altre righe, logga solo le prime due celle
-                    databaseMap = updateDatabaseMap(row, databaseMap);
+                    updateDatabaseMap(row, databaseMap);
                 }
                 rowIndex++;
             }
             return new FileProcessDto(true, "File validato correttamente", databaseMap);
-        } finally {
-            // Chiude il workbook se aperto
-            if (workbook != null) {
-                workbook.close();
-            }
         }
     }
 
-    private DatabaseMap updateDatabaseMap(Row row, DatabaseMap databaseMap) {
+    private void updateDatabaseMap(Row row, DatabaseMap databaseMap) {
         // Estrai i dati per il database di origine
+        Cell tecnologiaSorgenteCell = row.getCell(0);
         Cell databaseSorgenteCell = row.getCell(1);
         Cell tabellaSorgenteCell = row.getCell(2);
         Cell colonnaSorgenteCell = row.getCell(3);
         Cell typeColonnaSorgenteCell = row.getCell(4);
 
+
         // Se i dati di origine sono presenti, crea o aggiorna la tabella
-        if (databaseSorgenteCell != null && tabellaSorgenteCell != null && colonnaSorgenteCell != null) {
+        if (tecnologiaSorgenteCell != null && databaseSorgenteCell != null && tabellaSorgenteCell != null && colonnaSorgenteCell != null) {
+
             Map<String, List<Table>> database = createOrUpdateTable(
                     databaseSorgenteCell.getStringCellValue(),
                     tabellaSorgenteCell.getStringCellValue(),
                     colonnaSorgenteCell.getStringCellValue(),
                     typeColonnaSorgenteCell.getStringCellValue(),
-                    databaseMap,
-                    true  // Indica che è la sorgente
+                    databaseMap.getDatabaseSorgente() != null && databaseMap.getDatabaseSorgente().get(tecnologiaSorgenteCell.getStringCellValue()) != null ? databaseMap.getDatabaseSorgente().get(tecnologiaSorgenteCell.getStringCellValue()) : null
             );
-            databaseMap.setDatabaseSorgente(database);
+            Map<String, Map<String, List<Table>>> externalMap = new HashMap<>();
+            externalMap.put(tecnologiaSorgenteCell.getStringCellValue(), database);
+            databaseMap.setDatabaseSorgente(externalMap);
+        } else {
+            throw new RuntimeException("Errore nella lettura delle celle sorgenti: tecnologia, database, tabella");
         }
 
         // Estrai i dati per il database di destinazione
+        Cell tecnologiaDestinazioneCell = row.getCell(8);
         Cell databaseDestinazioneCell = row.getCell(9);
         Cell tabellaDestinazioneCell = row.getCell(10);
         Cell colonnaDestinazioneCell = row.getCell(11);
         Cell typeColonnaDestinazioneCell = row.getCell(12);
 
         // Se i dati di destinazione sono presenti, crea o aggiorna la tabella
-        if (databaseDestinazioneCell != null && tabellaDestinazioneCell != null && colonnaDestinazioneCell != null) {
-            Map<String, List<Table>> database = createOrUpdateTable(
-                    databaseDestinazioneCell.getStringCellValue(),
-                    tabellaDestinazioneCell.getStringCellValue(),
-                    colonnaDestinazioneCell.getStringCellValue(),
-                    typeColonnaDestinazioneCell.getStringCellValue(),
-                    databaseMap,
-                    false  // Indica che è la destinazione
-            );
-            databaseMap.setDatabaseDestinazione(database);
+        if (tecnologiaDestinazioneCell != null && databaseDestinazioneCell != null && tabellaDestinazioneCell != null) {
+            if (colonnaDestinazioneCell != null) {
+                Map<String, List<Table>> database = createOrUpdateTable(
+                        databaseDestinazioneCell.getStringCellValue(),
+                        tabellaDestinazioneCell.getStringCellValue(),
+                        colonnaDestinazioneCell.getStringCellValue(),
+                        typeColonnaDestinazioneCell.getStringCellValue(),
+                        databaseMap.getDatabaseDestinazione() != null && databaseMap.getDatabaseDestinazione().get(tecnologiaDestinazioneCell.getStringCellValue()) != null ? databaseMap.getDatabaseDestinazione().get(tecnologiaDestinazioneCell.getStringCellValue()) : null
+                );
+
+                Map<String, Map<String, List<Table>>> externalMap = new HashMap<>();
+                externalMap.put(tecnologiaDestinazioneCell.getStringCellValue(), database);
+                databaseMap.setDatabaseDestinazione(externalMap);
+            }
+        } else {
+            throw new RuntimeException("Errore nella lettura delle celle destinazione: tecnologia, database, tabella");
         }
-        return databaseMap;
     }
 
-    private Map<String, List<Table>> createOrUpdateTable(String nomeDatabase, String nomeTabella, String nomeColonna, String typeColonna, DatabaseMap databaseMap, boolean isSorgente) {
-        // Recupera il database corretto (origine o destinazione) in base al flag `isSorgente`
-        Map<String, List<Table>> database = isSorgente ? databaseMap.getDatabaseSorgente() == null ? new HashMap<>() : databaseMap.getDatabaseSorgente()
-                : databaseMap.getDatabaseDestinazione() == null ? new HashMap<>() : databaseMap.getDatabaseDestinazione();
-
+    private Map<String, List<Table>> createOrUpdateTable(String nomeDatabase, String nomeTabella, String nomeColonna, String typeColonna, Map<String, List<Table>> database) {
         // Controlla se il database esiste già nella mappa
-        if (!database.containsKey(nomeDatabase)) {
+        if (database == null || !database.containsKey(nomeDatabase)) {
             // Se non esiste, crea una nuova lista di tabelle
             System.out.println("Creazione di un nuovo database per: " + nomeDatabase);
+            database = new HashMap<>();
             database.put(nomeDatabase, new ArrayList<>()); // Crea la nuova lista di tabelle
         }
 
