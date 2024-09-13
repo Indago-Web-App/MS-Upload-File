@@ -1,0 +1,17 @@
+OPEN METADA
+
+CREAZIONE DOCKER COMPOSE:
+https://docs.open-metadata.org/v1.4.x/quick-start/local-docker-deployment
+
+# Ho riscontrato un errore sull'esecuzione del container di mySql e ho dovuto cambiare la porta dalla 3306 alla 3307,
+# ho modificato il docker compose, anche nei puntamenti degli altri container e ho riavviato nel seguente modo:
+# riavvio DOCKER COMPOSE
+
+# Interrompi esecuzione
+docker-compose down
+
+# Ricrea e avvia i container
+docker-compose up --build -d
+
+# Verifica che i container siano in esecuzione:
+docker-compose ps

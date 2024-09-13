@@ -1,4 +1,4 @@
-package it.linearsystem.indago.bean.dto;
+package it.linearsystem.indago.bean.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
