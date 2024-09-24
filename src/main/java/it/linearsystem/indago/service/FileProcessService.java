@@ -3,28 +3,34 @@ package it.linearsystem.indago.service;
 import it.linearsystem.indago.bean.dto.DatabaseMap;
 import it.linearsystem.indago.bean.dto.FileProcessDto;
 import it.linearsystem.indago.bean.dto.FileValidityDto;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.openmetadata.schema.entity.data.Table;
-import org.openmetadata.schema.type.Column;
-import org.openmetadata.schema.type.ColumnConstraint;
-import org.openmetadata.schema.type.ColumnDataType;
+import org.openmetadata.client.model.Column;
+import org.openmetadata.client.model.Table;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 public class FileProcessService {
 
     private final Logger log = LoggerFactory.getLogger(FileProcessService.class);
+
+    @Autowired
+    private OMColumnService omColumnService;
+    @Autowired
+    private OMLineageService omLineageService;
 
     public FileProcessDto processFile(FileValidityDto fileValidityDto) throws IOException {
         DatabaseMap databaseMap = new DatabaseMap();
@@ -33,6 +39,9 @@ public class FileProcessService {
 
             // Ottieni il primo foglio
             XSSFSheet worksheet = workbook.getSheetAt(0);
+
+            // Ottieni le regioni di celle unite
+            List<CellRangeAddress> mergedRegions = worksheet.getMergedRegions();
 
             // Itera sulle righe del foglio
             int rowIndex = 0;
@@ -49,7 +58,8 @@ public class FileProcessService {
                     }
                 } else {
                     // Per le altre righe, logga solo le prime due celle
-                    updateDatabaseMap(row, databaseMap);
+                    createOrUpdateListTables(row, databaseMap, worksheet, mergedRegions);
+                    log.info("databaseMap: " + databaseMap);
                 }
                 rowIndex++;
             }
@@ -57,101 +67,137 @@ public class FileProcessService {
         }
     }
 
-    private void updateDatabaseMap(Row row, DatabaseMap databaseMap) {
-        // Estrai i dati per il database di origine
-        Cell tecnologiaSorgenteCell = row.getCell(0);
-        Cell databaseSorgenteCell = row.getCell(1);
-        Cell tabellaSorgenteCell = row.getCell(2);
-        Cell colonnaSorgenteCell = row.getCell(3);
-        Cell typeColonnaSorgenteCell = row.getCell(4);
+    @Getter
+    @Setter
+    public static class CellValue {
+        String tecnologiaName;
+        String schemaName;
+        String tabName;
+        String colName;
+        String colType;
+        String regola;
+    }
+
+    private void createOrUpdateListTables(Row row, DatabaseMap databaseMap, XSSFSheet worksheet, List<CellRangeAddress> mergedRegions) {
+        CellValue cellValueSorgente = new CellValue();
+        CellValue cellValueDestinazione = new CellValue();
 
 
-        // Se i dati di origine sono presenti, crea o aggiorna la tabella
-        if (tecnologiaSorgenteCell != null && databaseSorgenteCell != null && tabellaSorgenteCell != null && colonnaSorgenteCell != null) {
-
-            Map<String, List<Table>> database = createOrUpdateTable(
-                    databaseSorgenteCell.getStringCellValue(),
-                    tabellaSorgenteCell.getStringCellValue(),
-                    colonnaSorgenteCell.getStringCellValue(),
-                    typeColonnaSorgenteCell.getStringCellValue(),
-                    databaseMap.getDatabaseSorgente() != null && databaseMap.getDatabaseSorgente().get(tecnologiaSorgenteCell.getStringCellValue()) != null ? databaseMap.getDatabaseSorgente().get(tecnologiaSorgenteCell.getStringCellValue()) : null
-            );
-            Map<String, Map<String, List<Table>>> externalMap = new HashMap<>();
-            externalMap.put(tecnologiaSorgenteCell.getStringCellValue(), database);
-            databaseMap.setDatabaseSorgente(externalMap);
-        } else {
-            throw new RuntimeException("Errore nella lettura delle celle sorgenti: tecnologia, database, tabella");
+        // Ottieni i valori delle celle
+        cellValueSorgente.setTecnologiaName(getMergedCellValue(worksheet, row.getCell(0), mergedRegions));
+        cellValueSorgente.setSchemaName(getMergedCellValue(worksheet, row.getCell(1), mergedRegions));
+        cellValueSorgente.setTabName(getMergedCellValue(worksheet, row.getCell(2), mergedRegions));
+        cellValueSorgente.setColName(getMergedCellValue(worksheet, row.getCell(3), mergedRegions));
+        cellValueSorgente.setColType(getMergedCellValue(worksheet, row.getCell(4), mergedRegions));
+        if (cellValueSorgente.getTecnologiaName().isEmpty() || cellValueSorgente.getSchemaName().isEmpty() || cellValueSorgente.getTabName().isEmpty() ||
+                cellValueSorgente.getColName().isEmpty() || cellValueSorgente.getColType().isEmpty()) {
+            return;
+        }
+        // COME FACCIO POI A CAPIRE QUALE DEVO USARE O meno! COSì non va BENE
+        if (cellValueSorgente.getTecnologiaName().contains("\n") || cellValueSorgente.getSchemaName().contains("\n") || cellValueSorgente.getTabName().contains("\n")) {
+            return;
+        }
+        if (cellValueSorgente.getTabName().equals("EIM_T113_ENTE")) {
+            log.info("TABELLA: EIM_T113_ENTE");
         }
 
-        // Estrai i dati per il database di destinazione
-        Cell tecnologiaDestinazioneCell = row.getCell(8);
-        Cell databaseDestinazioneCell = row.getCell(9);
-        Cell tabellaDestinazioneCell = row.getCell(10);
-        Cell colonnaDestinazioneCell = row.getCell(11);
-        Cell typeColonnaDestinazioneCell = row.getCell(12);
+        //
+        cellValueDestinazione.setTecnologiaName(getMergedCellValue(worksheet, row.getCell(8), mergedRegions));
+        cellValueDestinazione.setSchemaName(getMergedCellValue(worksheet, row.getCell(9), mergedRegions));
+        cellValueDestinazione.setTabName(getMergedCellValue(worksheet, row.getCell(10), mergedRegions));
+        cellValueDestinazione.setColName(getMergedCellValue(worksheet, row.getCell(11), mergedRegions));
+        cellValueDestinazione.setColType(getMergedCellValue(worksheet, row.getCell(12), mergedRegions));
+        cellValueDestinazione.setRegola(getMergedCellValue(worksheet, row.getCell(6), mergedRegions));
 
-        // Se i dati di destinazione sono presenti, crea o aggiorna la tabella
-        if (tecnologiaDestinazioneCell != null && databaseDestinazioneCell != null && tabellaDestinazioneCell != null) {
-            if (colonnaDestinazioneCell != null) {
-                Map<String, List<Table>> database = createOrUpdateTable(
-                        databaseDestinazioneCell.getStringCellValue(),
-                        tabellaDestinazioneCell.getStringCellValue(),
-                        colonnaDestinazioneCell.getStringCellValue(),
-                        typeColonnaDestinazioneCell.getStringCellValue(),
-                        databaseMap.getDatabaseDestinazione() != null && databaseMap.getDatabaseDestinazione().get(tecnologiaDestinazioneCell.getStringCellValue()) != null ? databaseMap.getDatabaseDestinazione().get(tecnologiaDestinazioneCell.getStringCellValue()) : null
-                );
-
-                Map<String, Map<String, List<Table>>> externalMap = new HashMap<>();
-                externalMap.put(tecnologiaDestinazioneCell.getStringCellValue(), database);
-                databaseMap.setDatabaseDestinazione(externalMap);
+        // E VIA DI TAPULLI
+        if (cellValueSorgente.getSchemaName().contains("\n")) {
+            String[] schemas = cellValueSorgente.getSchemaName().split("\n");
+            if (schemas[0].equals("MODELLO") && schemas[1].equals("UNICO")) {
+                cellValueSorgente.setSchemaName("MODELLO_UNICO");
+            } else {
+                return;
             }
+        }
+        if (cellValueDestinazione.getSchemaName().contains("\n")) {
+            String[] schemas = cellValueDestinazione.getSchemaName().split("\n");
+            if (schemas[0].equals("MODELLO") && schemas[1].equals("UNICO")) {
+                cellValueDestinazione.setSchemaName("MODELLO_UNICO");
+            } else {
+                return;
+            }
+        }
+
+        //////////
+
+        // Verifica se la mappa esiste già
+        DatabaseMap.TableMap existingTableMapSorgente = databaseMap.getTabellaSorgente().stream()
+                .filter(dbMap -> dbMap.getTecnologia().equals(cellValueSorgente.getTecnologiaName())
+                        && dbMap.getSchema().equals(cellValueSorgente.getSchemaName())
+                        && dbMap.getTabella().getName().equals(cellValueSorgente.getTabName()))
+                .findFirst()
+                .orElse(null);
+
+        if (existingTableMapSorgente != null) {
+            updateTableMap(existingTableMapSorgente, cellValueSorgente, cellValueDestinazione);
         } else {
-            throw new RuntimeException("Errore nella lettura delle celle destinazione: tecnologia, database, tabella");
+            // Crea un nuovo DatabaseMap se non esiste
+            databaseMap.getTabellaSorgente().add(createNewTableMap(cellValueSorgente, cellValueDestinazione));
+        }
+
+        // Estrai i dati per il database di DESTINAZIONE
+        // Ottieni i valori delle celle
+
+        // Verifica se la mappa esiste già
+        DatabaseMap.TableMap existingTableMapDestinazione = databaseMap.getTabellaDestinazione().stream()
+                .filter(dbMap -> dbMap.getTecnologia().equals(cellValueDestinazione.getTecnologiaName())
+                        && dbMap.getSchema().equals(cellValueDestinazione.getSchemaName())
+                        && dbMap.getTabella().getName().equals(cellValueDestinazione.getTabName()))
+                .findFirst()
+                .orElse(null);
+
+        if (existingTableMapDestinazione != null) {
+            updateTableMap(existingTableMapDestinazione, cellValueDestinazione, null);
+        } else {
+            // Crea un nuovo DatabaseMap se non esiste
+            databaseMap.getTabellaDestinazione().add(createNewTableMap(cellValueDestinazione, null));
         }
     }
 
-    private Map<String, List<Table>> createOrUpdateTable(String nomeDatabase, String nomeTabella, String nomeColonna, String typeColonna, Map<String, List<Table>> database) {
-        // Controlla se il database esiste già nella mappa
-        if (database == null || !database.containsKey(nomeDatabase)) {
-            // Se non esiste, crea una nuova lista di tabelle
-            System.out.println("Creazione di un nuovo database per: " + nomeDatabase);
-            database = new HashMap<>();
-            database.put(nomeDatabase, new ArrayList<>()); // Crea la nuova lista di tabelle
+    private void updateTableMap(DatabaseMap.TableMap existingTableMap, CellValue cellValue, CellValue cellValueDestinazione) {
+        if (existingTableMap == null) {
+            throw new RuntimeException("Si sta cercando di fare update di una tabella che non esiste");
         }
+        List<Column> columns = existingTableMap.getTabella().getColumns();
+        Table tableSorgente = existingTableMap.getTabella();
 
-        // Recupera la lista di Table per il database
-        List<Table> tableList = database.get(nomeDatabase);
-
-        // Verifica se la tabella esiste già
-        Table table = tableList.stream()
-                .filter(t -> t.getName().equals(nomeTabella))
-                .findAny().orElse(null);
-
-        if (table != null) {
-            // Se la tabella esiste già, fai un log
-            System.out.println("La tabella " + nomeTabella + " esiste già nel database " + nomeDatabase);
-            // Verifica se la colonna esiste già
-            boolean colonnaEsiste = table.getColumns().stream()
-                    .anyMatch(col -> col.getName().equals(nomeColonna));
-            if (!colonnaEsiste) {
-                // Aggiungi la colonna se non esiste
-                Column column = createColumn(nomeColonna, null, typeColonna, null);
-                table.getColumns().add(column);
-                System.out.println("Aggiunta la colonna " + nomeColonna + " alla tabella " + nomeTabella);
+        if (!cellValue.getColName().isEmpty()) {
+            tableSorgente.setColumns(omColumnService.createOrUpdateColumn(cellValue.getColName(), null, cellValue.getColType(), null, columns));
+            if (cellValueDestinazione != null && !cellValue.getColName().contains(",")) {
+                existingTableMap.getLineage().add(omLineageService.createLineage(cellValueDestinazione, cellValue.getColName()));
             }
         } else {
-            // Se non esiste, crea e aggiungi la tabella
-            table = new Table();
-            table.setName(nomeTabella);  // Nome corretto della tabella
-            List<Column> columns = new ArrayList<>();
-            columns.add(createColumn(nomeColonna, null, typeColonna, null));
-            table.setColumns(columns);
-            tableList.add(table);
-            System.out.println("Aggiunta la tabella " + nomeTabella + " al database " + nomeDatabase + " con la colonna " + nomeColonna);
+            log.info("La colonna è vuota, non la considero");
         }
-        return database;
     }
 
+    private DatabaseMap.TableMap createNewTableMap(CellValue cellValue, CellValue cellValueDestinazione) {
+        Table table = new Table();
+        table.setName(cellValue.getTabName());
+
+        List<Column> columns = new ArrayList<>();
+        table.setColumns(omColumnService.createOrUpdateColumn(cellValue.getColName(), cellValue.getRegola(), cellValue.getColType(), null, columns));
+
+        DatabaseMap.TableMap tableMap = new DatabaseMap.TableMap();
+        tableMap.setTecnologia(cellValue.getTecnologiaName());
+        tableMap.setSchema(cellValue.getSchemaName());
+        tableMap.setTabella(table);
+        if (cellValueDestinazione != null && !cellValue.getColName().contains(",")) {
+            List<DatabaseMap.Lineage> listLineage = new ArrayList<>();
+            listLineage.add(omLineageService.createLineage(cellValueDestinazione, cellValue.getColName()));
+            tableMap.setLineage(listLineage);
+        }
+        return tableMap;
+    }
 
     // Metodo per validare la prima riga
     private FileProcessDto validateFirstRow(Row row) {
@@ -197,116 +243,47 @@ public class FileProcessService {
         return new FileProcessDto(true, "Seconda riga validata correttamente.", null);
     }
 
-    // Metodo per loggare solo le prime due celle di righe successive
-    private void logRowFirstTwoCells(Row row) {
-        log.info("Logging first two cells of row " + row.getRowNum());
-        for (int cellNum = 0; cellNum < 2; cellNum++) {
-            Cell cell = row.getCell(cellNum);
-            if (cell != null) {
-                log.info("ploadFile - ROW " + row.getRowNum() + " - CELL " + cellNum + " Value: " + getCellValueAsString(cell));
-            } else {
-                log.info("ploadFile - ROW " + row.getRowNum() + " - CELL " + cellNum + " is null");
+    // Metodo per ottenere il valore corretto di una cella, considerando le celle unite
+    private String getMergedCellValue(XSSFSheet sheet, Cell cell, List<CellRangeAddress> mergedRegions) {
+        if (cell == null) {
+            return "";
+        }
+        for (CellRangeAddress range : mergedRegions) {
+            if (range.isInRange(cell.getRowIndex(), cell.getColumnIndex())) {
+                // Se la cella è unita, ritorna il valore della prima cella della regione
+                Row firstRow = sheet.getRow(range.getFirstRow());
+                Cell firstCell = firstRow.getCell(range.getFirstColumn());
+                return getCellValue(firstCell);
             }
         }
+        // Se non è unita, ritorna il valore normale della cella
+        return getCellValue(cell);
     }
 
-    // Metodo per ottenere il valore della cella come stringa
-    private String getCellValueAsString(Cell cell) {
+    // Metodo per ottenere il valore di una cella
+    private String getCellValue(Cell cell) {
+        if (cell == null) {
+            return "";
+        }
         switch (cell.getCellType()) {
             case STRING:
+                if (cell.getStringCellValue().equals("MODELLO UNICO")) {
+                    return "MODELLO_UNICO";
+                }
                 return cell.getStringCellValue();
             case NUMERIC:
-                return String.valueOf(cell.getNumericCellValue());
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return cell.getDateCellValue().toString();
+                } else {
+                    return String.valueOf(cell.getNumericCellValue());
+                }
             case BOOLEAN:
                 return String.valueOf(cell.getBooleanCellValue());
             case FORMULA:
                 return cell.getCellFormula();
             default:
-                return "Unknown Value";
+                return "";
         }
     }
-
-    private Column createColumn(
-            String colName,
-            String colDesc,
-            String tipoColonnaStr,
-            ColumnConstraint constraint) {
-        Column column = new Column();
-        column.setName(colName);
-        column.setDescription(colDesc);
-        column.setDisplayName(colName);
-
-        // Data TYPE
-        ColumnDataType dataType = null;
-        Integer lunghezza = null;
-        Integer precisione = null;
-        Integer scala = null;
-
-        // Esegui il parsing della stringa del tipo colonna, ad esempio "varchar(255)" o "number(15,0)"
-        if (tipoColonnaStr != null && !tipoColonnaStr.isEmpty()) {
-            tipoColonnaStr = tipoColonnaStr.toLowerCase().trim();
-
-            // Verifica il tipo di dato in base alla stringa
-            if (tipoColonnaStr.startsWith("varchar")) {
-                dataType = ColumnDataType.VARCHAR;
-                lunghezza = parseLength(tipoColonnaStr);  // Esempio: varchar(255) -> lunghezza 255
-            } else if (tipoColonnaStr.startsWith("number")) {
-                dataType = ColumnDataType.NUMBER;
-                int[] precisionAndScale = parsePrecisionAndScale(tipoColonnaStr);  // Esempio: number(15,0) -> precisione 15, scala 0
-                if (precisionAndScale != null) {
-                    precisione = precisionAndScale[0];
-                    scala = precisionAndScale[1];
-                }
-            } else {
-                throw new RuntimeException("Tipo colonna non esistente");
-            }
-            // Aggiungi altri tipi di dato a seconda delle necessità, ad esempio:
-            // else if (tipoColonnaStr.startsWith("date")) {
-            //     dataType = ColumnDataType.DATE;
-            // }
-        }
-
-        column.setDataType(dataType);
-        column.setDataLength(lunghezza);
-        column.setPrecision(precisione);
-        column.setScale(scala);
-
-        if (constraint != null) {
-            column.setConstraint(constraint);
-        }
-        return column;
-    }
-
-    private Integer parseLength(String tipoColonnaStr) {
-        // Cerca il valore numerico all'interno delle parentesi per il tipo varchar
-        int start = tipoColonnaStr.indexOf('(');
-        int end = tipoColonnaStr.indexOf(')');
-        if (start != -1 && end != -1) {
-            try {
-                return Integer.parseInt(tipoColonnaStr.substring(start + 1, end));
-            } catch (NumberFormatException e) {
-                System.out.println("Errore nel parsing della lunghezza: " + tipoColonnaStr);
-            }
-        }
-        return null;  // Nessuna lunghezza trovata o errore di parsing
-    }
-
-    private int[] parsePrecisionAndScale(String tipoColonnaStr) {
-        // Cerca i valori di precisione e scala all'interno delle parentesi per il tipo number
-        int start = tipoColonnaStr.indexOf('(');
-        int end = tipoColonnaStr.indexOf(')');
-        if (start != -1 && end != -1) {
-            try {
-                String[] values = tipoColonnaStr.substring(start + 1, end).split(",");
-                int precision = Integer.parseInt(values[0].trim());
-                int scale = values.length > 1 ? Integer.parseInt(values[1].trim()) : 0;  // Se non specificato, la scala è 0
-                return new int[]{precision, scale};
-            } catch (NumberFormatException e) {
-                System.out.println("Errore nel parsing di precisione e scala: " + tipoColonnaStr);
-            }
-        }
-        return null;  // Nessun valore trovato o errore di parsing
-    }
-
 
 }
