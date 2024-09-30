@@ -1,5 +1,15 @@
 OPEN METADA
 
+# AVVIO DOCKER E STOP
+sudo systemctl start docker
+
+sudo systemctl stop docker
+sudo systemctl disable docker
+
+sudo systemctl status docker
+
+
+
 CREAZIONE DOCKER COMPOSE:
 https://docs.open-metadata.org/v1.4.x/quick-start/local-docker-deployment
 

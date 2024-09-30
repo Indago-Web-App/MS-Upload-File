@@ -1,0 +1,22 @@
+# -e al posto -s crea la enterprise se no usiamo la standard
+./buildContainerImage.sh -v 19.3.0 -s
+
+# RUN COntainer
+docker run -d -p 1521:1521 -p 5500:5500 --name oracle-se2-db19c -e ORACLE_PWD=password oracle/database:19.3.0-se2
+
+# CREAZIONE DEL LISTENER
+docker exec -it oracle-se2-db19c bash
+sqlplus sys/password@localhost:1521/ORCLCDB as sysdba
+
+# VERIFICA se esiste SHOW PDBS;
+# nel caso lo apro:
+ALTER PLUGGABLE DATABASE ORCLPDB1 OPEN;
+
+CREATE PLUGGABLE DATABASE ORCLPDB1 ADMIN USER pdbadmin IDENTIFIED BY password FILE_NAME_CONVERT = ('/opt/oracle/oradata/ORCLCDB/pdbseed/', '/opt/oracle/oradata/ORCLCDB/ORCLPDB1/');
+
+ALTER PLUGGABLE DATABASE ORCLPDB1 OPEN;
+
+SHOW PDBS;
+
+## creare tablespsace cartella
+mkdir -p /opt/oracle/oradata/ORCLCDB/orclpdb1/

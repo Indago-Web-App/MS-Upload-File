@@ -42,7 +42,7 @@ public class OpenMetadataService {
         // Create OpenMetadata Gateway
         OpenMetadata openMetadataGateway = new OpenMetadata(openMetadataConnection);
 
-        /*initAmbiente(openMetadataGateway);*/
+        initAmbiente(openMetadataGateway);
 
         // SORGENTE
         logger.info("Tabelle sorgenti da elaborare: " + fileProcessed.getDatabaseMap().getTabellaSorgente().size());
@@ -81,6 +81,7 @@ public class OpenMetadataService {
         i = new AtomicInteger(1);
         AtomicInteger finalI2 = i;
         lineageMap.forEach(lineage -> {
+            logger.info("LINEAGE numero: " + finalI2);
             createLineageOMD(openMetadataGateway, lineage);
             if (finalI2.get() == 1 || (finalI2.get() % 30 == 0) || finalI2.get() == lineageMap.size()) {
                 logger.info("Ho creato lineage: " + finalI2.get());
@@ -254,36 +255,18 @@ public class OpenMetadataService {
     }
 
     private void initAmbiente(OpenMetadata openMetadataGateway) {
-        TablesApi tablesApi = openMetadataGateway.buildClient(TablesApi.class);
+        /*TablesApi tablesApi = openMetadataGateway.buildClient(TablesApi.class);
         DatabaseSchemasApi databaseSchemasApi = openMetadataGateway.buildClient(DatabaseSchemasApi.class);
-        DatabasesApi databasesApi = openMetadataGateway.buildClient(DatabasesApi.class);
+        DatabasesApi databasesApi = openMetadataGateway.buildClient(DatabasesApi.class);*/
+
         DatabaseServicesApi databaseServicesApi = openMetadataGateway.buildClient(DatabaseServicesApi.class);
 
         DatabaseServiceList databaseServiceList = databaseServicesApi.listDatabaseServices(null);
         databaseServiceList.getData().forEach(dbs -> {
-            DatabasesApi.ListDatabasesQueryParams listDatabasesQueryParams = new DatabasesApi.ListDatabasesQueryParams();
-            listDatabasesQueryParams.put("service", dbs.getFullyQualifiedName());
-            DatabaseList databaseList = databasesApi.listDatabases(listDatabasesQueryParams);
-            logger.info("Ho Recuperato la lista degli schema appartenenti al Database: " + dbs.getFullyQualifiedName());
-
-            databaseList.getData().forEach(db -> {
-                DatabaseSchemasApi.ListDBSchemasQueryParams listDBSchemasQueryParams = new DatabaseSchemasApi.ListDBSchemasQueryParams();
-                listDBSchemasQueryParams.put("database", db.getFullyQualifiedName());
-                DatabaseSchemaList databaseSchemaList = databaseSchemasApi.listDBSchemas(listDBSchemasQueryParams);
-
-                databaseSchemaList.getData().forEach(dbSchema -> {
-                    TablesApi.ListTablesQueryParams listTablesQueryParams = new TablesApi.ListTablesQueryParams();
-                    listTablesQueryParams.put("databaseSchema", dbSchema.getFullyQualifiedName());
-                    TableList tableList = tablesApi.listTables(listTablesQueryParams);
-                    tableList.getData().forEach(table -> {
-                        tablesApi.deleteTable(table.getId(), null);
-                    });
-                    databaseSchemasApi.deleteDBSchema(dbSchema.getId(), null);
-                });
-                logger.info("Ho Recuperato la lista degli schema appartenenti al Database: " + db.getFullyQualifiedName());
-                databasesApi.deleteDatabase(db.getId(), null);
-            });
-            databaseServicesApi.deleteDatabaseService(dbs.getId(), null);
+            DatabaseServicesApi.DeleteDatabaseServiceQueryParams deleteDatabaseServiceQueryParams = new DatabaseServicesApi.DeleteDatabaseServiceQueryParams();
+            deleteDatabaseServiceQueryParams.recursive(true);
+            deleteDatabaseServiceQueryParams.hardDelete(true);
+            databaseServicesApi.deleteDatabaseService(dbs.getId(), deleteDatabaseServiceQueryParams);
         });
         logger.info("Ho terminato l'inizializzazione");
     }

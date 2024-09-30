@@ -1,7 +1,6 @@
 package it.linearsystem.indago.openmetadata;
 
 import it.linearsystem.indago.bean.dto.DataAssetRequest;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
