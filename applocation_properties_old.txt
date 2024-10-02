@@ -32,7 +32,7 @@ logging.pattern.level=INFO
 # REQUEST LOG
 #spring.http.log-request-details=true
 #spring.mvc.log-request-details=true
-#spring.codec.log-request-details=true 
+#spring.codec.log-request-details=true
 
 # DISABILITA L'AUTOCONFIGURAZIONE DI SPRING SECURITY
 spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.security.SecurityAutoConfiguration
@@ -44,25 +44,31 @@ spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.security.Sec
 #spring.security.user.password = admin
 #spring.security.user.roles = admin
 
-spring.datasource.url=jdbc:postgresql://172.16.0.118:5432/postgres
-spring.datasource.username=linear
-spring.datasource.password=Sy@$12q$a
-spring.datasource.driver-class-name=org.postgresql.Driver
+#spring.datasource.url=jdbc:postgresql://172.16.0.118:5432/postgres
+#spring.datasource.username=linear
+#spring.datasource.password=Sy@$12q$a
+#spring.datasource.driver-class-name=org.postgresql.Driver
 
 #spring.datasource.xa.dataSourceClassName=com.mysql.cj.jdbc.MysqlXADataSource
 #spring.datasource.xa.data-source-class-name=com.mysql.cj.jdbc.MysqlXADataSource
 #spring.datasource.xa.dataSourceClassName=com.mysql.cj.jdbc.MysqlDataSource
 #spring.datasource.xa.data-source-class-name=com.mysql.cj.jdbc.MysqlDataSource
 
-spring.jpa.database = POSTGRESQL
-spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
+#spring.jpa.database = POSTGRESQL
+#spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
 #spring.jpa.database-platform=org.hibernate.dialect.PostgreSQL94Dialect
-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+#spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
 #spring.jpa.hibernate.ddl-auto=<create | create-drop | update | validate | none>
+
+spring.datasource.url=jdbc:oracle:thin:@localhost:1521:orcl
+spring.datasource.username=tuo_username
+spring.datasource.password=tuo_password
+spring.datasource.driver-class-name=oracle.jdbc.OracleDriver
+spring.jpa.database-platform=org.hibernate.dialect.Oracle12cDialect
 
 # This setting ensures that PGAdapter automatically commits the current transaction if it encounters
 # a DDL statement in a read/write transaction, and then executes the DDL statements as a single DDL
-# batch. 
+# batch.
 #spanner.ddl_transaction_mode=options=-c%20spanner.ddl_transaction_mode=AutocommitExplicitTransaction
 
 openmetadata.server.url=http://localhost:8585/api

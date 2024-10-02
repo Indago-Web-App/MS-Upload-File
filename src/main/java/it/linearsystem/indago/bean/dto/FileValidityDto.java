@@ -1,5 +1,6 @@
 package it.linearsystem.indago.bean.dto;
 
+import it.linearsystem.indago.entity.FileUpload;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -13,4 +14,5 @@ public class FileValidityDto {
     private String nameFile;
     private InputStream inputStream;
     private long size;
+    private FileUpload fileUpload;
 }

@@ -1,0 +1,86 @@
+server:
+  port: 8081
+  servlet:
+    context-path: /Indago
+
+spring:
+  application:
+    name: IndagoWebApp
+
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.SecurityAutoConfiguration
+    # exclude: org.springframework.boot.autoconfigure.security.ManagementWebSecurityAutoConfiguration
+
+  servlet:
+    multipart:
+      enabled: true
+      location: ${java.io.tmpdir}
+      max-file-size: 10240KB
+      max-request-size: 10240KB
+
+  datasource:
+    #url: jdbc:oracle:thin:@//localhost:1521/ORCLPDB1
+    url: jdbc:oracle:thin:@//172.16.0.118:1521/ORCLPDB1
+    username: indago_user
+    password: indagoUserPassword
+    driver-class-name: oracle.jdbc.OracleDriver
+  jpa:
+    hibernate:
+      ddl-auto: none  # Puoi usare "validate" o "none" a seconda del tuo contesto
+    show-sql: false
+    database-platform: org.hibernate.dialect.OracleDialect
+
+# LOGS CONFIGURATION No enum constant org.springframework.boot.logging.LogLevel.DEBUG  # Generate and log statistics
+# debug=true
+
+logging:
+  level:
+    root: info
+    org:
+      springframework: INFO
+      springframework.cloud.openfeign: INFO
+      springframework.web: DEBUG
+      springframework.web.server.adapter.HttpWebHandlerAdapter: DEBUG
+      springframework.security: DEBUG
+  file:
+    path: logs
+    name: ${logs-path}/${spring.application.name}.log
+    max-history: 5
+    max-size: 10MB
+    # max-size.negative=false
+    # logging.file.total-size-cap=5
+  pattern:
+    rolling-file-name: ${logs-path}/${spring.application.name}-%d{yyyy-MM-dd}.%i.gz
+    level: INFO
+
+logs-path: logs
+
+
+# DI BASE CON LA SOLA DIPENDENZA DI SPRING SECURITY SI HA LA SEGUENTE PASSWORD:
+# Using generated security password: 365f4592-5e3f-4e6f-b35f-d58f4b69030b
+# AGGIUNTA DI UNO USER CUSTOM
+# spring.security.user.name = admin
+# spring.security.user.password = admin
+# spring.security.user.roles = admin
+
+# DATABASE CONFIGURATION
+
+# spring.jpa.database = POSTGRESQL
+# spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
+# spring.jpa.database-platform=org.hibernate.dialect.PostgreSQL94Dialect
+# spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+# spring.jpa.hibernate.ddl-auto=<create | create-drop | update | validate | none>
+
+# COMMENTI SU CONFIGURAZIONE DDL
+# This setting ensures that PGAdapter automatically commits the current transaction
+# if it encounters a DDL statement in a read/write transaction, and then executes the
+# DDL statements as a single DDL batch.
+# spanner.ddl_transaction_mode=options=-c%20spanner.ddl_transaction_mode=AutocommitExplicitTransaction
+
+openmetadata:
+  server:
+    #url: http://localhost:8585/api
+    url: http://172.16.0.118:8585/api
+  auth:
+    #token: eyJraWQiOiJHYjM4OWEtOWY3Ni1nZGpzLWE5MmotMDI0MmJrOTQzNTYiLCJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJvcGVuLW1ldGFkYXRhLm9yZyIsInN1YiI6InV0ZW50ZSIsInJvbGVzIjpbIkluZ2VzdGlvbkJvdFJvbGUiXSwiZW1haWwiOiJ1dGVudGVAZW1haWwuaXQiLCJpc0JvdCI6dHJ1ZSwidG9rZW5UeXBlIjoiQk9UIiwiaWF0IjoxNzI3MTA1NTk4LCJleHAiOm51bGx9.csIDzP8FycttuxKK92PMjZg9TtbsvuqIiaMEgHJvE1rGQfzAK1ohBf22_ejzHj9-R1Nz-FYCcziLuuO-cm4QgLBmo1LAXISH7-lRI5tVeegarOG5cz54A5rC-dKcX6uTzJqMiDSFQJ6MVI754488RQXhxXZmrvWkd_5Af8QCOS3yMqwCexuCvr5Qph0f0NamNXEmCN5Wwhe_QuMOIK5gdqrQCUpTp61odszMjeghEMZSplCguwB3nwdOJoj28Ttg4Wea7qZ3nBIkf6tp_ozS2iWct6T7flfKn6LkWbuRjLblC2W-BYCbXpxqMd0VTGZolntVktnDqzdv3hlWMqDeZQ
+    token: eyJraWQiOiJHYjM4OWEtOWY3Ni1nZGpzLWE5MmotMDI0MmJrOTQzNTYiLCJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJvcGVuLW1ldGFkYXRhLm9yZyIsInN1YiI6IndlYi1hcHAiLCJyb2xlcyI6W10sImVtYWlsIjoid2ViLWFwcEBpbmRhZ28uaXQiLCJpc0JvdCI6dHJ1ZSwidG9rZW5UeXBlIjoiQk9UIiwiaWF0IjoxNzI3NzkzNzU2LCJleHAiOm51bGx9.PyWucaWB1Vw14BHUnZPdx6KxDz2GqUJr-COH_empQJXYa_PZvGvIb5UgQCYp19rN9amiW6r3Z0UpP63QjEU0T_QVVVbXJvhjCLxNfOjqbflQr32QgNP1ItMxul5try6qV3s8jxT0nBtxpdbJtPgH0cJj0xKRaPdq8kjZuqYJ-QwChb9PpJS1ezv_BLw6CGgIZaQi2LHN-fh4mETj3YQEzO8UpREvyGvJEBR_LRJDuPguNmVBg9-InX4jWFAlkjClZQX6lPwvySzngVVyiiymSqSPCebyQ_KVnnntdkBLJsrWwOhEivvbh2mWZMiJbC5B3Zhz4l8zwX09mxWo4QUocQ

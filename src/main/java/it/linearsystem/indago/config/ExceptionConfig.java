@@ -276,34 +276,6 @@ public class ExceptionConfig extends ResponseEntityExceptionHandler {
 
     }
 
-//    @ExceptionHandler(UsernameAlreadyExistsException.class)
-//    public ResponseEntity<Object> handleUsernameAlreadyExistsException(UsernameAlreadyExistsException exc) {
-//    	
-//    	log.error("UsernameAlreadyExistsException Message: " + exc.getMessage());
-//        
-//        List<String> details = new ArrayList<String>();
-//        details.add(exc.getMessage());
-//        
-//        ResponseError err = new Responseerror(LocalDateTime.now(), "Username Already Exists Exception", details);
-//        
-//        return ResponseEntity.status(HttpStatus.FOUND).body(err);
-//        
-//    }
-//	
-//    @ExceptionHandler(FileStorageException.class)
-//    public ResponseEntity<Object> handleFileStorageException(FileStorageException exc) {
-//    	
-//    	log.error("FileStorageException Message: " + exc.getMessage());
-//        
-//        List<String> details = new ArrayList<String>();
-//        details.add(exc.getMessage());
-//        
-//        ResponseError err = new Responselog(Level.SEVERE, LocalDateTime.now(), "File Storage Exception", details);
-//        
-//        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(err);
-//        
-//    }
-
     @ExceptionHandler(FileNotFoundException.class)
     public ResponseEntity<Object> handleFileNotFoundException(FileNotFoundException exc) {
 
@@ -317,73 +289,6 @@ public class ExceptionConfig extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(err);
 
     }
-
-    /*@ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<Object> handleMaxSizeException(MaxUploadSizeExceededException exc) {
-        
-    	log.log(Level.SEVERE, "MaxUploadSizeExceededException Message: " + exc.getMessage());
-    	
-        List<String> details = new ArrayList<String>();
-        details.add(exc.getMessage());
-        
-        ResponseError err = new ResponseError(LocalDateTime.now(), "File Size Exceeded", details);
-        
-        return ResponseEntity.status(HttpStatus.EXPECTATION_FAILED).body(err);
-        
-    }*/
-
-//    @ExceptionHandler({ResourceAccessException.class, ConnectException.class, HttpClientErrorException.class, IllegalArgumentException.class})
-//    public final ResponseEntity<ResponseDto<?>> handleExternalResourceException(Exception ex, WebRequest request) {
-//
-//    	log.log(Level.SEVERE, "Exception: " + ex);
-//
-//    	String message = messageErrorHandler( ex );
-//    	
-//    	if ( ex.getLocalizedMessage().contains("/approvazioni/") ) message = "Connessione rifiutata dal servizio Approvazioni";
-//    	
-//    	ResponseDto<?> error = ResponseDto.builder().error("RES_NOT_FOUND", message, null).build();
-//
-//    	return new ResponseEntity<ResponseDto<?>>(error, HttpStatus.SERVICE_UNAVAILABLE);
-//
-//    }     
-//    
-//    @ExceptionHandler(Md5ChecksumException.class)
-//	public final ResponseEntity<ResponseDto<?>> handleMd5ChecksumException(Md5ChecksumException ex, WebRequest request) {
-//
-//		log.error("Exception: " + ex.getMessage());
-//		
-//        ResponseDto<?> error = ResponseDto.builder().error("MD5_ERROR", ex.getLocalizedMessage(), null).build();
-//
-//        return new ResponseEntity<ResponseDto<?>>(error, HttpStatus.NOT_ACCEPTABLE);
-//
-//	} 
-//    
-//    @ExceptionHandler(CypherException.class)
-//	public final ResponseEntity<ResponseDto<?>> handleCypherException(CypherException ex, WebRequest request) {
-//
-//		log.error("Exception: " + ex.getMessage());
-//		
-//        ResponseDto<?> error = ResponseDto.builder().error("CYPHER_ERROR", ex.getLocalizedMessage(), null).build();
-//
-//        return new ResponseEntity<ResponseDto<?>>(error, HttpStatus.UNPROCESSABLE_ENTITY);
-//
-//	} 
-//    
-//    private String messageErrorHandler( Exception e ) {
-//    	com.google.gson.Gson gson = new com.google.gson.Gson();
-//    	String msg = e.getLocalizedMessage();
-//    	String message = "Errore durante la chiamata al servizio";
-//    	try {
-//    		String subStr = msg.substring(7, msg.length()-1);
-//    		ResponseDto<?> responseDto = gson.fromJson(subStr, ResponseDto.class);
-//    		List<ResponseInfo> responseInfoList = responseDto.getInfo();
-//    		ResponseInfo responseInfo = responseInfoList.get(0);
-//    		message = responseInfo.getErrorDesc();
-//    	} catch(Exception ex) {
-//    		log.error("Errore nel parsing del messaggio di risposta: " + ex);
-//    	}
-//    	return message;
-//    }
 
     @ExceptionHandler({CannotAcquireLockException.class, LockTimeoutException.class})
     public final ResponseEntity<ResponseDto<?>> handleCannotAcquireLockException(Exception ex, WebRequest request) {

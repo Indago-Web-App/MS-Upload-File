@@ -1,5 +1,6 @@
 package it.linearsystem.indago.bean.dto;
 
+import it.linearsystem.indago.entity.FileUpload;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
@@ -12,12 +13,18 @@ import java.util.List;
 @Setter
 public class DatabaseMap {
 
-    List<TableMap> tabellaSorgente;
-    List<TableMap> tabellaDestinazione;
+    FileUpload fileUpload;
+    private Integer errori = 0;
+    List<TableMap> listTableMapSorgente;
+    List<TableMap> listTableMapDestinazione;
 
     public DatabaseMap() {
-        tabellaSorgente = new ArrayList<>();
-        tabellaDestinazione = new ArrayList<>();
+        listTableMapSorgente = new ArrayList<>();
+        listTableMapDestinazione = new ArrayList<>();
+    }
+
+    public void addErrore() {
+        this.errori++;
     }
 
     @Getter

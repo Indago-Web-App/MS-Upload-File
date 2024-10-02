@@ -20,7 +20,9 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.IntStream;
 
 @Service
 public class FileProcessService {
@@ -31,9 +33,12 @@ public class FileProcessService {
     private OMColumnService omColumnService;
     @Autowired
     private OMLineageService omLineageService;
+    @Autowired
+    private LogErroreFileService logErroreFileService;
 
     public FileProcessDto processFile(FileValidityDto fileValidityDto) throws IOException {
         DatabaseMap databaseMap = new DatabaseMap();
+        databaseMap.setFileUpload(fileValidityDto.getFileUpload());
         try (XSSFWorkbook workbook = new XSSFWorkbook(fileValidityDto.getInputStream())) {
             // Carica il workbook dal file .xlsx
 
@@ -58,27 +63,19 @@ public class FileProcessService {
                     }
                 } else {
                     // Per le altre righe, logga solo le prime due celle
-                    createOrUpdateListTables(row, databaseMap, worksheet, mergedRegions);
-                    log.info("databaseMap: " + databaseMap);
+                    createOrUpdateListTables(row, databaseMap, worksheet, mergedRegions, rowIndex);
+                    if (rowIndex == 3 || rowIndex % 100 == 0) {
+                        log.info("Processata riga: " + rowIndex);
+                    }
                 }
                 rowIndex++;
             }
+            log.info("FINE PROCESSAMENTO FILE - OK");
             return new FileProcessDto(true, "File validato correttamente", databaseMap);
         }
     }
 
-    @Getter
-    @Setter
-    public static class CellValue {
-        String tecnologiaName;
-        String schemaName;
-        String tabName;
-        String colName;
-        String colType;
-        String regola;
-    }
-
-    private void createOrUpdateListTables(Row row, DatabaseMap databaseMap, XSSFSheet worksheet, List<CellRangeAddress> mergedRegions) {
+    private void createOrUpdateListTables(Row row, DatabaseMap databaseMap, XSSFSheet worksheet, List<CellRangeAddress> mergedRegions, int rowIndex) {
         CellValue cellValueSorgente = new CellValue();
         CellValue cellValueDestinazione = new CellValue();
 
@@ -91,14 +88,15 @@ public class FileProcessService {
         cellValueSorgente.setColType(getMergedCellValue(worksheet, row.getCell(4), mergedRegions));
         if (cellValueSorgente.getTecnologiaName().isEmpty() || cellValueSorgente.getSchemaName().isEmpty() || cellValueSorgente.getTabName().isEmpty() ||
                 cellValueSorgente.getColName().isEmpty() || cellValueSorgente.getColType().isEmpty()) {
+            databaseMap.addErrore();
+            logErroreFileService.insertLogErroreFile(databaseMap.getFileUpload(), rowIndex + " - Valori tabella sorgente non validi");
             return;
         }
         // COME FACCIO POI A CAPIRE QUALE DEVO USARE O meno! COSì non va BENE
         if (cellValueSorgente.getTecnologiaName().contains("\n") || cellValueSorgente.getSchemaName().contains("\n") || cellValueSorgente.getTabName().contains("\n")) {
+            databaseMap.addErrore();
+            logErroreFileService.insertLogErroreFile(databaseMap.getFileUpload(), rowIndex + " - Valori tabella sorgente non validi");
             return;
-        }
-        if (cellValueSorgente.getTabName().equals("EIM_T113_ENTE")) {
-            log.info("TABELLA: EIM_T113_ENTE");
         }
 
         //
@@ -115,6 +113,8 @@ public class FileProcessService {
             if (schemas[0].equals("MODELLO") && schemas[1].equals("UNICO")) {
                 cellValueSorgente.setSchemaName("MODELLO_UNICO");
             } else {
+                databaseMap.addErrore();
+                logErroreFileService.insertLogErroreFile(databaseMap.getFileUpload(), rowIndex + " - Valori tabella sorgente non validi");
                 return;
             }
         }
@@ -123,6 +123,8 @@ public class FileProcessService {
             if (schemas[0].equals("MODELLO") && schemas[1].equals("UNICO")) {
                 cellValueDestinazione.setSchemaName("MODELLO_UNICO");
             } else {
+                databaseMap.addErrore();
+                logErroreFileService.insertLogErroreFile(databaseMap.getFileUpload(), rowIndex + " - Valori tabella sorgente non validi");
                 return;
             }
         }
@@ -130,7 +132,7 @@ public class FileProcessService {
         //////////
 
         // Verifica se la mappa esiste già
-        DatabaseMap.TableMap existingTableMapSorgente = databaseMap.getTabellaSorgente().stream()
+        DatabaseMap.TableMap existingTableMapSorgente = databaseMap.getListTableMapSorgente().stream()
                 .filter(dbMap -> dbMap.getTecnologia().equals(cellValueSorgente.getTecnologiaName())
                         && dbMap.getSchema().equals(cellValueSorgente.getSchemaName())
                         && dbMap.getTabella().getName().equals(cellValueSorgente.getTabName()))
@@ -138,17 +140,29 @@ public class FileProcessService {
                 .orElse(null);
 
         if (existingTableMapSorgente != null) {
-            updateTableMap(existingTableMapSorgente, cellValueSorgente, cellValueDestinazione);
+            try {
+                updateTableMap(existingTableMapSorgente, cellValueSorgente, cellValueDestinazione);
+            } catch (Exception e) {
+                databaseMap.addErrore();
+                logErroreFileService.insertLogErroreFile(databaseMap.getFileUpload(), rowIndex + " - " + e.getMessage());
+                return;
+            }
         } else {
             // Crea un nuovo DatabaseMap se non esiste
-            databaseMap.getTabellaSorgente().add(createNewTableMap(cellValueSorgente, cellValueDestinazione));
+            try {
+                databaseMap.getListTableMapSorgente().add(createNewTableMap(cellValueSorgente, cellValueDestinazione));
+            } catch (Exception e) {
+                databaseMap.addErrore();
+                logErroreFileService.insertLogErroreFile(databaseMap.getFileUpload(), rowIndex + " - " + e.getMessage());
+                return;
+            }
         }
 
         // Estrai i dati per il database di DESTINAZIONE
         // Ottieni i valori delle celle
 
         // Verifica se la mappa esiste già
-        DatabaseMap.TableMap existingTableMapDestinazione = databaseMap.getTabellaDestinazione().stream()
+        DatabaseMap.TableMap existingTableMapDestinazione = databaseMap.getListTableMapDestinazione().stream()
                 .filter(dbMap -> dbMap.getTecnologia().equals(cellValueDestinazione.getTecnologiaName())
                         && dbMap.getSchema().equals(cellValueDestinazione.getSchemaName())
                         && dbMap.getTabella().getName().equals(cellValueDestinazione.getTabName()))
@@ -156,10 +170,19 @@ public class FileProcessService {
                 .orElse(null);
 
         if (existingTableMapDestinazione != null) {
-            updateTableMap(existingTableMapDestinazione, cellValueDestinazione, null);
+            try {
+                updateTableMap(existingTableMapDestinazione, cellValueDestinazione, null);
+            } catch (Exception e) {
+                databaseMap.addErrore();
+                logErroreFileService.insertLogErroreFile(databaseMap.getFileUpload(), rowIndex + " - " + e.getMessage());
+            }
         } else {
-            // Crea un nuovo DatabaseMap se non esiste
-            databaseMap.getTabellaDestinazione().add(createNewTableMap(cellValueDestinazione, null));
+            try {
+                databaseMap.getListTableMapDestinazione().add(createNewTableMap(cellValueDestinazione, null));
+            } catch (Exception e) {
+                databaseMap.addErrore();
+                logErroreFileService.insertLogErroreFile(databaseMap.getFileUpload(), rowIndex + " - " + e.getMessage());
+            }
         }
     }
 
@@ -172,11 +195,19 @@ public class FileProcessService {
 
         if (!cellValue.getColName().isEmpty()) {
             tableSorgente.setColumns(omColumnService.createOrUpdateColumn(cellValue.getColName(), null, cellValue.getColType(), null, columns));
-            if (cellValueDestinazione != null && !cellValue.getColName().contains(",")) {
-                existingTableMap.getLineage().add(omLineageService.createLineage(cellValueDestinazione, cellValue.getColName()));
+            if (cellValueDestinazione != null) {
+                if (!cellValue.getColName().contains(",")) {
+                    existingTableMap.getLineage().add(omLineageService.createLineage(cellValueDestinazione, cellValue.getColName()));
+                } else {
+                    List<String> listColName = Arrays.asList(cellValue.getColName().split(",\\s*"));
+                    IntStream.range(0, listColName.size())
+                            .forEach(index -> {
+                                existingTableMap.getLineage().add(omLineageService.createLineage(cellValueDestinazione, listColName.get(index)));
+                            });
+                }
             }
         } else {
-            log.info("La colonna è vuota, non la considero");
+            throw new RuntimeException("La colonna è vuota, non la considero");
         }
     }
 
@@ -284,6 +315,17 @@ public class FileProcessService {
             default:
                 return "";
         }
+    }
+
+    @Getter
+    @Setter
+    public static class CellValue {
+        String tecnologiaName;
+        String schemaName;
+        String tabName;
+        String colName;
+        String colType;
+        String regola;
     }
 
 }

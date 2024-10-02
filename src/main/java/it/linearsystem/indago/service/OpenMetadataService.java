@@ -3,23 +3,28 @@ package it.linearsystem.indago.service;
 import it.linearsystem.indago.bean.dto.DatabaseMap;
 import it.linearsystem.indago.bean.dto.FileProcessDto;
 import it.linearsystem.indago.openmetadata.OpenMetadataClient;
-import org.openmetadata.client.api.*;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.openmetadata.client.api.DatabaseSchemasApi;
+import org.openmetadata.client.api.DatabaseServicesApi;
+import org.openmetadata.client.api.DatabasesApi;
+import org.openmetadata.client.api.TablesApi;
 import org.openmetadata.client.gateway.OpenMetadata;
 import org.openmetadata.client.model.*;
-import org.openmetadata.schema.security.client.OpenMetadataJWTClientConfig;
 import org.openmetadata.schema.services.connections.database.HiveConnection;
 import org.openmetadata.schema.services.connections.database.OracleConnection;
-import org.openmetadata.schema.services.connections.metadata.AuthProvider;
-import org.openmetadata.schema.services.connections.metadata.OpenMetadataConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.lang.Thread;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
@@ -27,115 +32,91 @@ public class OpenMetadataService {
 
     private static final Logger logger = LoggerFactory.getLogger(OpenMetadataService.class);
 
-    @Value("${openmetadata.server.url}")
-    private String urlOpenMetadata;
-    @Value("${openmetadata.auth.token}")
-    private String authToken;
-
+    @Autowired
+    private OpenMetadataUtilityService openMetadataUtilityService;
     @Autowired
     private OpenMetadataClient openMetadataClient;
     @Autowired
     private OMLineageService omLineageService;
 
-    public void processFile(FileProcessDto fileProcessed) {
-        OpenMetadataConnection openMetadataConnection = createConnection();
-        // Create OpenMetadata Gateway
-        OpenMetadata openMetadataGateway = new OpenMetadata(openMetadataConnection);
 
-        initAmbiente(openMetadataGateway);
+    public void processFile(FileProcessDto fileProcessed) {
+        // Create OpenMetadata Gateway
+        OpenMetadata openMetadataGateway = openMetadataUtilityService.getOpenMetadata();
+
+        // initAmbiente(openMetadataGateway);
 
         // SORGENTE
-        logger.info("Tabelle sorgenti da elaborare: " + fileProcessed.getDatabaseMap().getTabellaSorgente().size());
-        AtomicInteger i = new AtomicInteger(1);
-        AtomicInteger finalI = i;
-        fileProcessed.getDatabaseMap().getTabellaSorgente().forEach(tabella -> {
-            Table table = commonProcess(openMetadataGateway, tabella);
-
-            if (finalI.get() == 1 || (finalI.get() % 30 == 0) || finalI.get() == fileProcessed.getDatabaseMap().getTabellaSorgente().size()) {
-                logger.info("Ho inserito la tabella sorgente: " + finalI.get());
-            }
-            finalI.getAndIncrement();
-        });
-
+        processTables(fileProcessed.getDatabaseMap().getListTableMapSorgente(), "sorgente", openMetadataGateway, fileProcessed);
         // DESTINAZIONE
-        logger.info("Tabelle destinazione da elaborare: " + fileProcessed.getDatabaseMap().getTabellaDestinazione().size());
-        i = new AtomicInteger(1);
-        AtomicInteger finalI1 = i;
-        fileProcessed.getDatabaseMap().getTabellaDestinazione().forEach(tabella -> {
-            Table table = commonProcess(openMetadataGateway, tabella);
-
-            if (finalI1.get() == 1 || (finalI1.get() % 30 == 0) || finalI1.get() == fileProcessed.getDatabaseMap().getTabellaDestinazione().size()) {
-                logger.info("Ho inserito la tabella Destinazione: " + finalI1.get());
-            }
-            finalI1.getAndIncrement();
-        });
+        processTables(fileProcessed.getDatabaseMap().getListTableMapDestinazione(), "destinazione", openMetadataGateway, fileProcessed);
 
         // CREAZIONE LINEAGE
         logger.info("Inizio - PreProcess per lINEAGE");
-        List<OMLineageService.LineageToProcess> lineageMap = new ArrayList<>();
-        fileProcessed.getDatabaseMap().getTabellaSorgente().forEach(tabella -> {
-            omLineageService.prepareLineageFromTabSorgente(openMetadataGateway, tabella, lineageMap);
-        });
-        logger.info("Inizio - CREAZIONE lINEAGE - da processare: " + lineageMap.size());
-        logger.info("Inizio - CREAZIONE lINEAGE");
-        i = new AtomicInteger(1);
-        AtomicInteger finalI2 = i;
+        /*
+            CREO UN'ARRAY IN CUI HO:
+                - ID tabella sorgente
+                - ID tabella destinazione
+                - Mappa delle colonne destinazione con la lista delle colonne sorgenti
+        */
+        List<OMLineageService.LineageToProcess> lineageMap = omLineageService.prepareLineageFromList(fileProcessed.getDatabaseMap().getListTableMapSorgente(), fileProcessed.getDatabaseMap().getFileUpload());
+
+        logger.info("Inizio - CREAZIONE lINEAGE - da processare: {}", lineageMap.size());
+        AtomicInteger i = new AtomicInteger(1);
         lineageMap.forEach(lineage -> {
-            logger.info("LINEAGE numero: " + finalI2);
-            createLineageOMD(openMetadataGateway, lineage);
-            if (finalI2.get() == 1 || (finalI2.get() % 30 == 0) || finalI2.get() == lineageMap.size()) {
-                logger.info("Ho creato lineage: " + finalI2.get());
+            omLineageService.createLineageOMD(openMetadataGateway, lineage);
+            if (i.get() == 1 || (i.get() % 30 == 0) || i.get() == lineageMap.size()) {
+                logger.info("Ho creato lineage: {}", i.get());
             }
-            finalI2.getAndIncrement();
+            i.getAndIncrement();
         });
 
         logger.info("FINE - Ho inserito il database");
     }
 
-    private void createLineageOMD(OpenMetadata openMetadataGateway, OMLineageService.LineageToProcess lineageProcess) {
-        LineageApi lineageApi = openMetadataGateway.buildClient(LineageApi.class);
+    public void processTables(List<DatabaseMap.TableMap> listTableMap, String tipoTabella, OpenMetadata openMetadataGateway, FileProcessDto fileProcessed) {
+        logger.info("Tabelle {} da elaborare: {}", tipoTabella, listTableMap.size());
+        AtomicInteger recordsProcessed = new AtomicInteger(0);
+        int totalRecords = listTableMap.size();
 
-        // QUA CI METTIAMO LE TABELLE
-        EntityReference fromEntity = new EntityReference();
-        fromEntity.setId(lineageProcess.getIdTabSorgente());
-        /*fromEntity.setFullyQualifiedName(omTabSorgente.getTableSorgente().getFullyQualifiedName());*/
-        fromEntity.setType("table");
+        int numberOfThreads = 5;
+        ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
+        List<Future<?>> futures = new ArrayList<>();
 
-        EntityReference toEntity = new EntityReference();
-        toEntity.setId(lineageProcess.getIdTabDestinazione());
-        /*toEntity.setFullyQualifiedName(lineage.getFQNTable());*/
-        toEntity.setType("table");
-
-        // QUA LE COLONNE
-        LineageDetails lineageDetails = new LineageDetails();
-        List<ColumnLineage> columnLineages = new ArrayList<>();
-
-        for (Map.Entry<String, List<String>> entry : lineageProcess.getLineageEntity().entrySet()) {
-            ColumnLineage columnLineage = new ColumnLineage();
-
-            String fqnColumn = entry.getKey();
-            columnLineage.setToColumn(fqnColumn);
-
-            List<String> sourceColumns = entry.getValue();
-            columnLineage.setFromColumns(sourceColumns);
-
-            columnLineages.add(columnLineage);
+        for (DatabaseMap.TableMap tableMap : listTableMap) {
+            futures.add(executorService.submit(() -> {
+                try {
+                    DatabaseService databaseService = createDatabaseService(openMetadataGateway, tableMap.getTecnologia());
+                    Database database = createDatabase(openMetadataGateway, databaseService, tableMap.getTecnologia(), "");
+                    DatabaseSchema databaseSchema = createDatabaseSchema(openMetadataGateway, database, tableMap.getSchema(), "");
+                    assert databaseSchema != null;
+                    createTable(openMetadataGateway, databaseSchema, tableMap.getTabella());
+                } catch (Exception e) {
+                    logger.error("Errore durante l'elaborazione della tableMap: {}", tableMap, e);
+                } finally {
+                    // Incrementa il contatore dopo aver completato l'elaborazione
+                    int processedCount = recordsProcessed.incrementAndGet();
+                    // Registra il numero di record elaborati
+                    if (processedCount == 1 || (processedCount % 30 == 0) || processedCount == totalRecords) {
+                        logger.info("Ho elaborato {} su {} tableMap {}", processedCount, totalRecords, tipoTabella);
+                    }
+                }
+            }));
         }
-        lineageDetails.setColumnsLineage(columnLineages);
 
-        // CREO L'EDGE
-        EntitiesEdge edge = new EntitiesEdge();
-        edge.setFromEntity(fromEntity);
-        edge.setToEntity(toEntity);
-        edge.setLineageDetails(lineageDetails);
-
-        AddLineage addLineage = new AddLineage();
-        addLineage.setEdge(edge);
-
-        lineageApi.addLineageEdge(addLineage);
+        // Attendi il completamento di tutti i task
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(60, TimeUnit.MINUTES)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
-    private static Table createTable(OpenMetadata openMetadataGateway, DatabaseSchema databaseSchema, Table table) {
+    private void createTable(@NotNull OpenMetadata openMetadataGateway, @NotNull DatabaseSchema databaseSchema, @NotNull Table table) {
         TablesApi tablesApi = openMetadataGateway.buildClient(TablesApi.class);
 
         CreateTable createTable = new CreateTable();
@@ -146,10 +127,11 @@ public class OpenMetadataService {
         createTable.setDatabaseSchema(databaseSchema.getFullyQualifiedName());
 
         Table tableNew = tablesApi.createOrUpdateTable(createTable);
-        return tablesApi.getTableByID(tableNew.getId(), "*", "all");
+        tablesApi.getTableByID(tableNew.getId(), "*", "all");
     }
 
-    private DatabaseSchema createDatabaseSchema(OpenMetadata openMetadataGateway, Database database, String name, String description) {
+    @Nullable
+    private DatabaseSchema createDatabaseSchema(@NotNull OpenMetadata openMetadataGateway, Database database, String name, String description) {
         DatabaseSchemasApi databaseSchemasApi = openMetadataGateway.buildClient(DatabaseSchemasApi.class);
         /*try {
             ResponseEntity<?> dbService = openMetadataClient.getDatabaseSchemasByName(database.getFullyQualifiedName() + "." + name, "Bearer " + authToken);
@@ -173,7 +155,7 @@ public class OpenMetadataService {
         }
     }
 
-    private Database createDatabase(OpenMetadata openMetadataGateway, DatabaseService service, String dbName, String desc) {
+    private Database createDatabase(OpenMetadata openMetadataGateway, DatabaseService service, @NotNull String dbName, String desc) {
         if (dbName.equals("MODELLO UNICO")) {
             logger.info("STO creando db MODELLO UNICO");
         }
@@ -199,7 +181,7 @@ public class OpenMetadataService {
         return databasesApi.createOrUpdateDatabase(createdatabase);
     }
 
-    private DatabaseService createDatabaseService(OpenMetadata openMetadataGateway, String tecnologia) {
+    private DatabaseService createDatabaseService(@NotNull OpenMetadata openMetadataGateway, @NotNull String tecnologia) {
         // Call API
         DatabaseServicesApi databaseServicesApi = openMetadataGateway.buildClient(DatabaseServicesApi.class);
 
@@ -242,19 +224,7 @@ public class OpenMetadataService {
         }
     }
 
-    private Table commonProcess(OpenMetadata openMetadataGateway, DatabaseMap.TableMap tableMap) {
-        // RICERCA SERVICE DATABASE
-        DatabaseService databaseService = createDatabaseService(openMetadataGateway, tableMap.getTecnologia());
-        // RICERCA DATABASE
-        Database database = createDatabase(openMetadataGateway, databaseService, tableMap.getTecnologia(), "");
-        // CREA DATABASE SCHEMA
-        DatabaseSchema databaseSchema = createDatabaseSchema(openMetadataGateway, database, tableMap.getSchema(), "");
-        // INSERISCI TABELLA
-        assert databaseSchema != null;
-        return createTable(openMetadataGateway, databaseSchema, tableMap.getTabella());
-    }
-
-    private void initAmbiente(OpenMetadata openMetadataGateway) {
+    private void initAmbiente(@NotNull OpenMetadata openMetadataGateway) {
         /*TablesApi tablesApi = openMetadataGateway.buildClient(TablesApi.class);
         DatabaseSchemasApi databaseSchemasApi = openMetadataGateway.buildClient(DatabaseSchemasApi.class);
         DatabasesApi databasesApi = openMetadataGateway.buildClient(DatabasesApi.class);*/
@@ -271,16 +241,4 @@ public class OpenMetadataService {
         logger.info("Ho terminato l'inizializzazione");
     }
 
-    private OpenMetadataConnection createConnection() {
-        OpenMetadataConnection server;
-        server = new OpenMetadataConnection();
-        server.setHostPort(urlOpenMetadata);
-        server.setApiVersion("v1");
-
-        OpenMetadataJWTClientConfig openMetadataJWTClientConfig = new OpenMetadataJWTClientConfig();
-        openMetadataJWTClientConfig.setJwtToken(authToken);
-        server.setAuthProvider(AuthProvider.OPENMETADATA);
-        server.setSecurityConfig(openMetadataJWTClientConfig);
-        return server;
-    }
 }

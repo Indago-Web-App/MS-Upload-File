@@ -10,6 +10,7 @@ import java.util.List;
 @Setter
 @AllArgsConstructor
 public class FileProcessDto {
+
     private boolean isValid;
     private String message;
     private DatabaseMap databaseMap;

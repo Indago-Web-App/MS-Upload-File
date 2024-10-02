@@ -63,12 +63,11 @@ public class OMColumnService {
         Column col = columns.stream().filter(c -> c.getName().equals(colName)).findFirst().orElse(null);
         if (col == null) {
             if (colType == null || colType.isEmpty()) {
-                log.info("Questa colonna Non ha il tipo e quindi non l'inserisco:" + colName + " -- type: " + colType);
-                return null;
+                throw new RuntimeException("Questa colonna Non ha il tipo e quindi non l'inserisco:" + colName + " -- type: " + colType);
             }
             return initColumn(colName, colDesc, colType, constraint);
         } else {
-            log.info("Questa colonna esiste già e forse devo aggiornarla? -- name:" + colName + " -- type: " + colType);
+            // throw new RuntimeException("Questa colonna esiste già e forse devo aggiornarla? -- name:" + colName + " -- type: " + colType);
             return null;
         }
     }
@@ -95,15 +94,14 @@ public class OMColumnService {
                 try {
                     lunghezza = parseVarchar(colType);  // Esempio: varchar(255) -> lunghezza 255
                 } catch (Exception e) {
-                    return null;
-                    /*throw new RuntimeException("Tipo colonna VARCHAR errore lunghezza: " + colType);*/
+                    throw new RuntimeException("Eccezione nel parsing del tipo della colonna");
                 }
             } else if (colType.startsWith("char")) {
                 dataType = Column.DataTypeEnum.CHAR;
                 try {
                     lunghezza = parseVarchar(colType);  // Esempio: varchar(255) -> lunghezza 255
                 } catch (Exception e) {
-                    return null;
+                    throw new RuntimeException("Eccezione nel parsing del tipo della colonna");
                     /*throw new RuntimeException("Tipo colonna CHAR errore lunghezza: " + colType);*/
                 }
             } else if (colType.startsWith("int")) {
@@ -113,10 +111,11 @@ public class OMColumnService {
                     if (precisionAndScale != null) {
                         precisione = precisionAndScale[0];
                         scala = precisionAndScale[1];
+                    } else {
+                        throw new RuntimeException("Eccezione nel parsing del tipo della colonna");
                     }
                 } catch (Exception e) {
-                    return null;
-                    /*throw new RuntimeException("Tipo colonna NUMBER errore precisione: " + colType);*/
+                    throw new RuntimeException("Eccezione nel parsing del tipo della colonna");
                 }
             } else if (colType.startsWith("number")) {
                 dataType = Column.DataTypeEnum.NUMBER;
@@ -127,8 +126,7 @@ public class OMColumnService {
                         scala = precisionAndScale[1];
                     }
                 } catch (Exception e) {
-                    return null;
-                    /*throw new RuntimeException("Tipo colonna NUMBER errore precisione: " + colType);*/
+                    throw new RuntimeException("Eccezione nel parsing del tipo della colonna");
                 }
             } else if (colType.startsWith("decimal")) {
                 dataType = Column.DataTypeEnum.DECIMAL;
@@ -139,8 +137,7 @@ public class OMColumnService {
                         scala = precisionAndScale[1];
                     }
                 } catch (Exception e) {
-                    return null;
-                    /*throw new RuntimeException("Tipo colonna DECIMAL errore precisione: " + colType);*/
+                    throw new RuntimeException("Eccezione nel parsing del tipo della colonna");
                 }
             } else if (colType.startsWith("float")) {
                 dataType = Column.DataTypeEnum.FLOAT;
@@ -151,8 +148,7 @@ public class OMColumnService {
                         scala = precisionAndScale[1];
                     }
                 } catch (Exception e) {
-                    return null;
-                    /*throw new RuntimeException("Tipo colonna FLOAT errore precisione: " + colType);*/
+                    throw new RuntimeException("Eccezione nel parsing del tipo della colonna");
                 }
             } else if (colType.startsWith("double")) {
                 dataType = Column.DataTypeEnum.DOUBLE;
@@ -163,8 +159,7 @@ public class OMColumnService {
                         scala = precisionAndScale[1];
                     }
                 } catch (Exception e) {
-                    return null;
-                    /*throw new RuntimeException("Tipo colonna DOUBLE errore precisione: " + colType);*/
+                    throw new RuntimeException("Eccezione nel parsing del tipo della colonna");
                 }
             } else if (colType.startsWith("date")) {
                 dataType = Column.DataTypeEnum.DATE;
@@ -175,10 +170,6 @@ public class OMColumnService {
             } else {
                 throw new RuntimeException("Tipo colonna non esistente: " + colType);
             }
-            // Aggiungi altri tipi di dato a seconda delle necessità, ad esempio:
-            // else if (colType.startsWith("date")) {
-            //     dataType = ColumnDataType.DATE;
-            // }
         }
 
         column.setDataType(dataType);

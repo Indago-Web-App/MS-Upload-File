@@ -1,22 +1,39 @@
-# -e al posto -s crea la enterprise se no usiamo la standard
+# Crea cartella di lavoro
+mkdir oracle-docker
+
+# clona le docker images
+git clone https://github.com/oracle/docker-images.git
+# entriamo nella cartella che ci serve
+cd docker-images/OracleDatabase/SingleInstance/dockerfiles
+# Ora va scaricata la versione zip di oracleDB dal sito ufficiale: https://www.oracle.com/database/technologies/oracle19c-linux-downloads.html
+# E posizioniamo questo zip nella cartella: docker-images/OracleDatabase/SingleInstance/dockerfiles/19.3.0/
+
+
+## ORA POSSIAMO COSTRUIRE l'IMMAGINE DOCKER - Useremo la standard edition -
+## N.B. SPOSTIAMOCI NELLA DIRECTORY GIUSTA
+
+cd - docker-images/OracleDatabase/SingleInstance/dockerfiles/
+
+# CREIAMO l'IMMAGINE DOCKER CON enterprise edition
 ./buildContainerImage.sh -v 19.3.0 -s
 
+## VERIFICHIAMO IMMAGINE
+docker images
+
 # RUN COntainer
-docker run -d -p 1521:1521 -p 5500:5500 --name oracle-se2-db19c -e ORACLE_PWD=password oracle/database:19.3.0-se2
+docker run --name oracledb \
+  -p 1521:1521 -p 5500:5500 \
+  -e ORACLE_PWD=Rodolfo01? \
+  -d oracle/database:19.3.0-se2
 
-# CREAZIONE DEL LISTENER
-docker exec -it oracle-se2-db19c bash
-sqlplus sys/password@localhost:1521/ORCLCDB as sysdba
+# Verifichiamo il container
+docker logs -f oracledb
 
-# VERIFICA se esiste SHOW PDBS;
-# nel caso lo apro:
-ALTER PLUGGABLE DATABASE ORCLPDB1 OPEN;
+docker exec -it oracledb bash
 
-CREATE PLUGGABLE DATABASE ORCLPDB1 ADMIN USER pdbadmin IDENTIFIED BY password FILE_NAME_CONVERT = ('/opt/oracle/oradata/ORCLCDB/pdbseed/', '/opt/oracle/oradata/ORCLCDB/ORCLPDB1/');
+# All'interno del container
+sqlplus / as sysdba
 
-ALTER PLUGGABLE DATABASE ORCLPDB1 OPEN;
+docker stop oracledb
+docker start oracledb
 
-SHOW PDBS;
-
-## creare tablespsace cartella
-mkdir -p /opt/oracle/oradata/ORCLCDB/orclpdb1/
